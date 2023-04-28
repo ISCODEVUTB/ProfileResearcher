@@ -9,7 +9,7 @@ import {
 } from "@mui/material";
 import { AccountCircle, ExpandMore, SendOutlined } from "@mui/icons-material";
 import SemanticScholar from "./_SemanticScholar";
-import { Data } from "@/interfaces/Data";
+import { Data } from "@/interfaces/data";
 
 function _ResearcherProfile() {
   const [data, setData] = useState<Data | null>(null);

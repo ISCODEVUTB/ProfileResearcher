@@ -9,7 +9,7 @@ import {
 } from "@mui/material";
 import React from "react";
 import SCProfileData from "./_SCProfileData";
-import { Data } from "@/interfaces/Data";
+import { Data } from "@/interfaces/data";
 
 function _SemanticScholar({ data = {} as Data }) {
   return (
