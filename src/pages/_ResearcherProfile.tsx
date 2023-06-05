@@ -1,34 +1,94 @@
 import React, { useState, useEffect } from "react";
-import { getProfileByName } from "@/services/semanticScholar";
+import { Grid } from "@mui/material";
+import { Article, KeyPhrase } from "@/interfaces/data";
+import { getArticles } from "@/services/getArticles";
 import {
-  TextField,
-  Typography,
-  Grid,
-  InputAdornment,
-  IconButton,
-} from "@mui/material";
-import { AccountCircle, ExpandMore, SendOutlined } from "@mui/icons-material";
-import SemanticScholar from "./_SemanticScholar";
-import { Data } from "@/interfaces/data";
+  TextAnalyticsClient,
+  AzureKeyCredential,
+} from "@azure/ai-text-analytics";
+import TopView from "./views/TopView";
+import LogicView from "./views/LogicView";
+
+const endpoint = process.env.ENDPOINT as string;
+const apiKey = process.env.APIKEY as string;
+const credential = new AzureKeyCredential(apiKey);
+const client = new TextAnalyticsClient(endpoint, credential);
 
 function _ResearcherProfile() {
-  const [data, setData] = useState<Data | null>(null);
-  const [profileName, setProfileName] = useState<String>("");
+  const [articles, setArticles] = useState<Article[] | null>(null);
+  const [keyPhrases, setKeyPhrases] = useState<KeyPhrase[]>([]);
+  const [topKeyPhrases, setTopKeyPhrases] = useState<KeyPhrase[]>([]);
+  const [profileName, setProfileName] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [keyPhrasesView, setKeyPhrasesView] = useState(false);
+
+  useEffect(() => {
+    async function fetchKeyPhrases() {
+      if (articles) {
+        setKeyPhrases([]);
+        const promises = articles.map((article) => {
+          if (article.abstract) {
+            return client.recognizeEntities([article.abstract, article.title]);
+          } else {
+            return client.recognizeEntities([article.title]);
+          }
+        });
+
+        const resultsArray: any[] = await Promise.all(promises);
+
+        const updatedKeyPhrases: KeyPhrase[] = [];
+
+        for (const results of resultsArray) {
+          for (const result of results) {
+            for (const newKeyPhrase of result.entities) {
+              if (newKeyPhrase.category === "Skill") {
+                const foundKeyPhraseIndex = updatedKeyPhrases.findIndex(
+                  (keyPhrase) => keyPhrase.phrase === newKeyPhrase.text
+                );
+                if (foundKeyPhraseIndex !== -1) {
+                  updatedKeyPhrases[foundKeyPhraseIndex].frequency += 1;
+                } else {
+                  updatedKeyPhrases.push({
+                    phrase: newKeyPhrase.text,
+                    frequency: 1,
+                  });
+                }
+              }
+            }
+          }
+        }
+        setKeyPhrases(updatedKeyPhrases);
+      }
+    }
+    fetchKeyPhrases();
+  }, [articles]);
+
+  useEffect(() => {
+    const top25KeyPhrases = [...keyPhrases]
+      .sort((a, b) => b.frequency - a.frequency)
+      .slice(0, 25);
+    setTopKeyPhrases(top25KeyPhrases);
+  }, [keyPhrases]);
 
   const handleSubmit = (event: { preventDefault: () => void }) => {
     event.preventDefault();
     async function fetchData() {
-      console.log(profileName);
-      const result = await getProfileByName(profileName);
-      setData(result);
+      setLoading(true);
+      const result = await getArticles(profileName);
+      setLoading(false);
+      setArticles(result);
     }
     fetchData();
   };
 
   const handleChange = (event: {
-    target: { value: React.SetStateAction<String> };
+    target: { value: React.SetStateAction<string> };
   }) => {
     setProfileName(event.target.value);
+  };
+
+  const handleChangeSwitch = () => {
+    setKeyPhrasesView(!keyPhrasesView);
   };
 
   return (
@@ -39,57 +99,21 @@ function _ResearcherProfile() {
         alignItems="center"
         alignContent="center"
         justifyContent="center"
-        style={{ marginTop: "120px", marginBottom: "120px" }}
+        style={{ marginTop: "32px", marginBottom: "5px" }}
       >
-        <Grid item>
-          <Typography
-            style={{ fontFamily: "Oswald, sans-serif" }}
-            variant="h2"
-            component="h1"
-            gutterBottom
-          >
-            Researcher Profile
-          </Typography>
-        </Grid>
-        <Grid item>
-          <form onSubmit={handleSubmit}>
-            <TextField
-              label=""
-              type="text"
-              variant="filled"
-              placeholder=""
-              name="profileName"
-              value={profileName}
-              onChange={handleChange}
-              sx={{ width: "240px" }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <AccountCircle fontSize="large" />
-                  </InputAdornment>
-                ),
-              }}
-            />
-            <IconButton onClick={handleSubmit}>
-              <SendOutlined fontSize="large" />
-            </IconButton>
-          </form>
-        </Grid>
-
+        <TopView
+          handleChange={handleChange}
+          handleChangeSwitch={handleChangeSwitch}
+          handleSubmit={handleSubmit}
+          profileName={profileName}
+        />
         <br />
-        {data?.total === 0 || !data?.total ? (
-          data?.total === 0 ? (
-            <Grid item sx={{ color: "#1500AB" }} >
-              <h1>No se encontro ningun perfil</h1>
-            </Grid>
-          ) : (
-            <Grid item>
-              <></>
-            </Grid>
-          )
-        ) : (
-          <SemanticScholar data={data} />
-        )}
+        <LogicView
+          articles={articles}
+          keyPhrasesView={keyPhrasesView}
+          loading={loading}
+          topKeyPhrases={topKeyPhrases}
+        />
       </Grid>
     </>
   );

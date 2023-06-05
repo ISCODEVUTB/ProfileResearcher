@@ -4,6 +4,10 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  env: {
+    APIKEY: process.env.APIKEY,
+    ENDPOINT: process.env.ENDPOINT,
+  },
 }
 
 module.exports = nextConfig
